@@ -107,7 +107,7 @@ Target "CopyBinaries" (fun _ ->
 // Clean build results
 
 Target "Clean" (fun _ ->
-    CleanDirs ["bin"; "temp"; "src/FsUnit.NUnit/bin/"]
+    CleanDirs ["bin"; "temp"; "src/FsUnit.NUnit/bin/"; "src/FsUnit.Xunit/bin/"; "src/FsUnit.MsTestUnit/bin/"]
 )
 
 Target "CleanDocs" (fun _ ->
@@ -331,34 +331,50 @@ Target "Release" (fun _ ->
 Target "BuildPackage" DoNothing
 
 // --------------------------------------------------------------------------------------
-// Build netcore expecto library
+// Build netcore libraries
+
+let buildNetCoreLibrary testsDir testsProj =
+    // Build all and execute unit tests
+    DotNetCli.Restore    (fun c -> { c with WorkingDir = testsDir; Project = testsProj })
+    DotNetCli.Build      (fun c -> { c with WorkingDir = testsDir; Project = testsProj })
+    DotNetCli.Test       (fun c -> { c with WorkingDir = testsDir; Project = testsProj })
 
 Target "NUnitCore" (fun _ ->
-    // Build all and execute unit tests
-    let nunitTestsDir, nunitTestsProj = "tests/FsUnit.NUnit.Test", "FsUnit.NUnit.Test.netcoreapp.fsproj"
-    DotNetCli.Restore    (fun c -> { c with WorkingDir = nunitTestsDir; Project = nunitTestsProj })
-    DotNetCli.Build      (fun c -> { c with WorkingDir = nunitTestsDir; Project = nunitTestsProj })
-    DotNetCli.RunCommand (fun c -> { c with WorkingDir = nunitTestsDir })
-        (sprintf "run --project %s" nunitTestsProj)
+    buildNetCoreLibrary "tests/FsUnit.NUnit.Test" "FsUnit.NUnit.Test.netcoreapp.fsproj"    
 )
 
-Target "NuGetNUnitCore" (fun _ ->
-    // Rebuild project and pack (create NuGet package)
-    let nunitDir, nunitProj = "src/FsUnit.NUnit", "FsUnit.NUnit.netstandard.fsproj"
-    DotNetCli.Restore    (fun c -> { c with WorkingDir = nunitDir; Project = nunitProj })
-    DotNetCli.Build      (fun c -> { c with WorkingDir = nunitDir; Project = nunitProj })
-    DotNetCli.RunCommand (fun c -> { c with WorkingDir = nunitDir})
-        (sprintf "pack \"%s\" /p:Version=%s --configuration Release" nunitProj (release.NugetVersion))
+Target "xUnitCore" (fun _ ->
+    buildNetCoreLibrary "tests/FsUnit.Xunit.Test" "FsUnit.Xunit.Test.netcoreapp.fsproj"    
+)
 
-    // Restore dotnet-mergenupkg and merge two packages
+Target "MSTestCore" (fun _ ->
+    buildNetCoreLibrary "tests/FsUnit.MsTest.Test" "Fs30Unit.MsTest.Test.netcoreapp.fsproj"
+)
+
+Target "NuGetNetCore" (fun _ ->
     let toolsDir = "tools/"
-    DotNetCli.Restore    (fun c -> { c with WorkingDir = toolsDir})
 
-    let nupkg = sprintf "FsUnit.%s.nupkg" release.NugetVersion
-    DotNetCli.RunCommand (fun c -> { c with WorkingDir = toolsDir})
-        (sprintf "mergenupkg --source \"./../bin/%s\" --other \"./../src/FsUnit.NUnit/bin/Release/%s\" --framework netstandard1.6" nupkg nupkg)
+    let buildPackage projectDir projectFile packageNameTemplate =
+        DotNetCli.Restore    (fun c -> { c with WorkingDir = projectDir; Project = projectFile })
+        DotNetCli.Build      (fun c -> { c with WorkingDir = projectDir; Project = projectFile })
+        DotNetCli.RunCommand (fun c -> { c with WorkingDir = projectDir })
+            (sprintf "pack \"%s\" /p:Version=%s --configuration Release" projectFile (release.NugetVersion))
+
+        let nupkg = sprintf packageNameTemplate release.NugetVersion
+        DotNetCli.RunCommand (fun c -> { c with WorkingDir = toolsDir })
+            (sprintf "mergenupkg --source \"./../bin/%s\" --other \"./../%s/bin/Release/%s\" --framework netstandard1.6" nupkg projectDir nupkg)
+
+    DotNetCli.Restore (fun c -> { c with WorkingDir = toolsDir })
+  
+    //NUnit
+    buildPackage "src/FsUnit.NUnit" "FsUnit.NUnit.netstandard.fsproj" "FsUnit.%s.nupkg"
+
+    //xUnit
+    buildPackage "src/FsUnit.Xunit" "FsUnit.Xunit.netstandard.fsproj" "FsUnit.xUnit.%s.nupkg"
+
+    //MSTest
+    buildPackage "src/FsUnit.MsTestUnit" "FsUnit.MsTest.netstandard.fsproj" "Fs30Unit.MsTest.%s.nupkg"
 )
-
 
 // --------------------------------------------------------------------------------------
 // Run all targets by default. Invoke 'build <Target>' to override
@@ -384,6 +400,8 @@ Target "All" DoNothing
 
 // .NET Standard and .NET Core support
 "AssemblyInfo" ==> "NUnitCore"  ==> "RunTests"
+"AssemblyInfo" ==> "xUnitCore"  ==> "RunTests"
+"AssemblyInfo" ==> "MSTestCore"  ==> "RunTests"
 
 "All"
 #if MONO
@@ -391,7 +409,7 @@ Target "All" DoNothing
   // =?> ("SourceLink", Pdbstr.tryFind().IsSome )
 #endif
   ==> "NuGet"
-  ==> "NuGetNUnitCore"
+  ==> "NuGetNetCore"
   ==> "BuildPackage"
 
 "CleanDocs"

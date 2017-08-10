@@ -1,16 +1,19 @@
 <Project Sdk="FSharp.NET.Sdk;Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard1.6</TargetFramework>
-    <AssemblyName>FsUnit.NUnit</AssemblyName>
-    <PackageId>FsUnit</PackageId>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>FsUnit.Xunit</AssemblyName>
+    <PackageId>FsUnit.xUnit</PackageId>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="CustomMatchers.fs" />
     <Compile Include="FsUnit.fs" />
-    <Compile Include="FsUnitTyped.fs" />
-    <Compile Include="GenericAssert.fs" />
     <None Include="paket.references" />
+    <None Include="paket.template" />
+    <None Include="FsUnitSample.fs.pp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="sample.paket.template" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
